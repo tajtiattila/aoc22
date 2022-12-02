@@ -63,9 +63,10 @@ fn get_day_funcs(cli: &Cli) -> Vec<(usize, DayFunc)> {
 }
 
 mod day01;
+mod day02;
 
 fn day_funcs() -> Vec<DayFunc> {
-    vec![(day01::run as DayFunc)]
+    vec![(day01::run as DayFunc), (day02::run as DayFunc)]
 }
 
 fn day_ok<T, U>(t: T, u: U) -> DayResult
