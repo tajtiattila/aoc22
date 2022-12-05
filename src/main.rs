@@ -4,6 +4,22 @@ use std::collections::HashSet;
 
 const AOC_YEAR: u32 = 22;
 
+mod day01;
+mod day02;
+mod day03;
+mod day04;
+mod day05;
+
+fn day_funcs() -> Vec<DayFunc> {
+    vec![
+        (day01::run as DayFunc),
+        (day02::run as DayFunc),
+        (day03::run as DayFunc),
+        (day04::run as DayFunc),
+        (day05::run as DayFunc),
+    ]
+}
+
 mod util;
 use util::InputSource;
 
@@ -60,18 +76,6 @@ fn get_day_funcs(cli: &Cli) -> Vec<(usize, DayFunc)> {
     } else {
         vec![*v.last().unwrap()]
     }
-}
-
-mod day01;
-mod day02;
-mod day03;
-
-fn day_funcs() -> Vec<DayFunc> {
-    vec![
-        (day01::run as DayFunc),
-        (day02::run as DayFunc),
-        (day03::run as DayFunc),
-    ]
 }
 
 fn day_ok<T, U>(t: T, u: U) -> DayResult
