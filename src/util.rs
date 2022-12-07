@@ -12,7 +12,7 @@ pub struct InputSource {
 }
 
 impl InputSource {
-    pub fn new() -> anyhow::Result<InputSource> {
+    pub fn new() -> Result<InputSource> {
         let sessionvar = format!("AOC{}_SESSION", AOC_YEAR);
 
         let session = env::var(sessionvar)?;
