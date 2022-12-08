@@ -26,43 +26,35 @@ fn trees(input: &str) -> (usize, usize) {
 }
 
 fn vis(v: &[Vec<u8>], x: usize, y: usize) -> bool {
-    let row = &v[y];
-    let t = row[x];
-    if x == 0 || y == 0 || x == row.len() - 1 || y == v.len() - 1 {
-        return true;
-    }
-    return row[x + 1..].iter().all(|z| *z < t)
-        || row[..x].iter().all(|z| *z < t)
-        || v[y + 1..].iter().all(|r| r[x] < t)
-        || v[..y].iter().all(|r| r[x] < t);
+    let t = v[y][x];
+    rays(v, x, y).iter().any(|v| v.iter().all(|h| *h < t))
 }
 
 fn scenic(v: &[Vec<u8>], x: usize, y: usize) -> usize {
-    let row = &v[y];
-    let t = row[x];
-    if x == 0 || y == 0 || x == row.len() - 1 || y == v.len() - 1 {
-        return 0;
-    }
-    let s0 = svis(t, row[x + 1..].iter().copied());
-    let s1 = svis(t, row[..x].iter().rev().copied());
-    let s2 = svis(t, v[y + 1..].iter().map(|r| r[x]));
-    let s3 = svis(t, v[..y].iter().rev().map(|r| r[x]));
-    s0 * s1 * s2 * s3
+    let t = v[y][x];
+    rays(v, x, y)
+        .iter()
+        .map(|v| {
+            let mut n = 0;
+            for h in v {
+                n += 1;
+                if *h >= t {
+                    break;
+                }
+            }
+            n
+        })
+        .product()
 }
 
-fn svis<It>(t: u8, it: It) -> usize
-where
-    It: Iterator<Item = u8>,
-{
-    it.scan(true, |go, h| {
-        if *go {
-            *go = h < t;
-            Some(())
-        } else {
-            None
-        }
-    })
-    .count()
+fn rays(v: &[Vec<u8>], x: usize, y: usize) -> Vec<Vec<u8>> {
+    let row = &v[y];
+    vec![
+        row[x + 1..].to_vec(),
+        row[..x].iter().rev().copied().collect(),
+        v[y + 1..].iter().map(|r| r[x]).collect(),
+        v[..y].iter().rev().map(|r| r[x]).collect(),
+    ]
 }
 
 #[cfg(test)]
