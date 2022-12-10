@@ -2,31 +2,49 @@ use crate::{day_ok, DayResult, Options};
 
 pub fn run(input: &str, _: &Options) -> DayResult {
     let p1 = signal_strength(input);
-    day_ok(p1, "")
+    let p2 = crt(input, '▒', ' ');
+    day_ok(p1, p2)
 }
 
 fn signal_strength(input: &str) -> i32 {
-    let mut x = 1;
-    input
-        .lines()
-        .filter_map(asm)
-        .flat_map(|instr| {
-            let x0 = x;
-            let n = match instr {
-                Instr::Addx(v) => {
-                    x += v;
-                    2
-                }
-                Instr::Noop => 1,
-            };
-            std::iter::repeat(x0).take(n)
-        })
-        .enumerate()
+    sim(input)
         .filter_map(|(i, x)| {
             let i = (i + 1) as i32;
             ((i % 40) == 20).then_some(i * x)
         })
         .sum()
+}
+
+fn crt(input: &str, on: char, off: char) -> String {
+    let mut s = String::new();
+    for (i, x) in sim(input) {
+        let col = i % 40;
+        if col == 0 {
+            s.push('\n')
+        }
+        s.push(if (col - x).abs() <= 1 { on } else { off });
+    }
+    s
+}
+
+fn sim(input: &str) -> impl Iterator<Item = (i32, i32)> + '_ {
+    input
+        .lines()
+        .filter_map(asm)
+        .scan(1, |x, instr| {
+            let x0 = *x;
+            let n = match instr {
+                Instr::Addx(v) => {
+                    *x += v;
+                    2
+                }
+                Instr::Noop => 1,
+            };
+            Some((x0, n))
+        })
+        .flat_map(|(x, n)| std::iter::repeat(x).take(n))
+        .enumerate()
+        .map(|(i, x)| (i as i32, x))
 }
 
 fn asm(line: &str) -> Option<Instr> {
@@ -203,5 +221,15 @@ noop
 ";
 
         assert_eq!(signal_strength(sample), 13140);
+
+        let want_crt = "\
+##..##..##..##..##..##..##..##..##..##..
+###...###...###...###...###...###...###.
+####....####....####....####....####....
+#####.....#####.....#####.....#####.....
+######......######......######......####
+#######.......#######.......#######.....";
+
+        assert_eq!(crt(sample, '#', '.').trim(), want_crt.trim());
     }
 }
