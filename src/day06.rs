@@ -1,9 +1,13 @@
-use crate::{day_ok, DayResult, Options};
+use crate::Options;
 
-pub fn run(input: &str, _: &Options) -> DayResult {
+pub fn run(input: &str, _: &Options) -> anyhow::Result<String> {
     let input = input.trim_matches(char::is_whitespace);
 
-    day_ok(nproc_start(input, 4), nproc_start(input, 14))
+    Ok(format!(
+        "{} {}",
+        nproc_start(input, 4),
+        nproc_start(input, 14)
+    ))
 }
 
 fn nproc_start(s: &str, n: usize) -> usize {

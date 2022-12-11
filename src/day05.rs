@@ -1,11 +1,11 @@
-use crate::{day_ok, DayResult, Options};
+use crate::Options;
 
-pub fn run(input: &str, _: &Options) -> DayResult {
+pub fn run(input: &str, _: &Options) -> anyhow::Result<String> {
     let (stk, vrearr) = parse(input);
 
     let p1 = sim(move1, &stk, &vrearr);
     let p2 = sim(move2, &stk, &vrearr);
-    day_ok(p1, p2)
+    Ok(format!("{} {}", p1, p2))
 }
 
 type Stacks = Vec<Vec<char>>;

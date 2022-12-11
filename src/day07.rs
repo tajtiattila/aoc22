@@ -1,8 +1,8 @@
-use crate::{day_ok, DayResult, Options};
+use crate::Options;
 use anyhow::{anyhow, bail};
 use std::collections::HashMap;
 
-pub fn run(input: &str, o: &Options) -> DayResult {
+pub fn run(input: &str, o: &Options) -> anyhow::Result<String> {
     let t = tree(input).ok_or_else(|| anyhow!("invalid tree"))?;
     let sizes = dir_sizes(&t);
     if sizes.is_empty() {
@@ -20,7 +20,7 @@ pub fn run(input: &str, o: &Options) -> DayResult {
     }
     let p2 = sizes.iter().filter(|&&x| free + x >= NEED).min().unwrap();
 
-    day_ok(p1, p2)
+    Ok(format!("{} {}", p1, p2))
 }
 
 fn dir_sizes(tree: &Vec<Tree>) -> Vec<usize> {

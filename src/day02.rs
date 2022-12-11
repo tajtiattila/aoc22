@@ -1,10 +1,10 @@
-use crate::{day_ok, DayResult, Options};
+use crate::Options;
 use std::cmp::Ordering;
 
-pub fn run(input: &str, _: &Options) -> DayResult {
+pub fn run(input: &str, _: &Options) -> anyhow::Result<String> {
     let p1 = sim(input, |_, p| p);
     let p2 = sim(input, |o, z| (o + z + 2) % 3);
-    day_ok(p1, p2)
+    Ok(format!("{} {}", p1, p2))
 }
 
 fn sim<F: FnMut(u8, u8) -> u8>(input: &str, mut f: F) -> usize {

@@ -57,8 +57,8 @@ fn main() -> anyhow::Result<()> {
         let r = is.get(i).and_then(|s| f(&s, &options));
         print!("Day {:?}: ", i);
         match r {
-            Ok((x, y)) => println!("{} {}", x, y),
-            Err(e) => println!("{}", e),
+            Ok(result) => println!("{}", result),
+            Err(e) => eprintln!("{}", e),
         }
     }
 
@@ -69,8 +69,7 @@ pub struct Options {
     verbose: bool,
 }
 
-type DayResult = Result<(String, String)>;
-type DayFunc = fn(&str, &Options) -> DayResult;
+type DayFunc = fn(&str, &Options) -> Result<String>;
 
 fn get_day_funcs(cli: &Cli) -> Vec<(usize, DayFunc)> {
     let v: Vec<(usize, DayFunc)> = day_funcs()
@@ -86,12 +85,4 @@ fn get_day_funcs(cli: &Cli) -> Vec<(usize, DayFunc)> {
     } else {
         vec![*v.last().unwrap()]
     }
-}
-
-fn day_ok<T, U>(t: T, u: U) -> DayResult
-where
-    T: std::fmt::Display,
-    U: std::fmt::Display,
-{
-    Ok((t.to_string(), u.to_string()))
 }

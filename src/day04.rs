@@ -1,11 +1,11 @@
-use crate::{day_ok, DayResult, Options};
+use crate::Options;
 
-pub fn run(input: &str, _: &Options) -> DayResult {
+pub fn run(input: &str, _: &Options) -> anyhow::Result<String> {
     let p1 = count_rp(input, |a, b, c, d| (a <= c && d <= b));
     let p2 = count_rp(input, |a, b, c, d| {
         (a..=b).contains(&c) || (a..=b).contains(&d)
     });
-    day_ok(p1, p2)
+    Ok(format!("{} {}", p1, p2))
 }
 
 fn count_rp<F>(input: &str, mut f: F) -> usize

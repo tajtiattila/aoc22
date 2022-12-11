@@ -1,8 +1,8 @@
-use crate::{day_ok, DayResult, Options};
+use crate::Options;
 
-pub fn run(input: &str, _: &Options) -> DayResult {
+pub fn run(input: &str, _: &Options) -> anyhow::Result<String> {
     let (p1, p2) = trees(input);
-    day_ok(p1, p2)
+    Ok(format!("{} {}", p1, p2))
 }
 
 fn trees(input: &str) -> (usize, usize) {

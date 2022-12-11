@@ -1,9 +1,9 @@
-use crate::{day_ok, DayResult, Options};
+use crate::Options;
 use itertools::Itertools;
 use std::collections::HashSet;
 
-pub fn run(input: &str, _: &Options) -> DayResult {
-    day_ok(p1(input), p2(input))
+pub fn run(input: &str, _: &Options) -> anyhow::Result<String> {
+    Ok(format!("{} {}", p1(input), p2(input)))
 }
 
 fn p1(input: &str) -> u32 {

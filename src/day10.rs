@@ -1,9 +1,9 @@
-use crate::{day_ok, DayResult, Options};
+use crate::Options;
 
-pub fn run(input: &str, _: &Options) -> DayResult {
+pub fn run(input: &str, _: &Options) -> anyhow::Result<String> {
     let p1 = signal_strength(input);
     let p2 = crt(input, '▒', ' ');
-    day_ok(p1, p2)
+    Ok(format!("{}{}", p1, p2))
 }
 
 fn signal_strength(input: &str) -> i32 {

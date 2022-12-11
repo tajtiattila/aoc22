@@ -1,14 +1,14 @@
-use crate::{day_ok, DayResult, Options};
+use crate::Options;
 use std::cmp::Reverse;
 
-pub fn run(input: &str, _: &Options) -> DayResult {
+pub fn run(input: &str, _: &Options) -> anyhow::Result<String> {
     let mut cals = calories(input);
     cals.sort_by_key(|&x| Reverse(x));
 
-    let pr1 = cals[0];
-    let pr2 = cals.iter().take(3).sum::<usize>();
+    let p1 = cals[0];
+    let p2 = cals.iter().take(3).sum::<usize>();
 
-    day_ok(pr1, pr2)
+    Ok(format!("{} {}", p1, p2))
 }
 
 fn calories(input: &str) -> Vec<usize> {

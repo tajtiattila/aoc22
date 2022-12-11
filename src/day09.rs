@@ -1,10 +1,10 @@
-use crate::{day_ok, DayResult, Options};
+use crate::Options;
 use std::collections::HashSet;
 
-pub fn run(input: &str, _: &Options) -> DayResult {
+pub fn run(input: &str, _: &Options) -> anyhow::Result<String> {
     let p1 = stretch(input, 2);
     let p2 = stretch(input, 10);
-    day_ok(p1, p2)
+    Ok(format!("{} {}", p1, p2))
 }
 
 fn stretch(input: &str, rope_len: usize) -> usize {
