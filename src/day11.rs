@@ -2,27 +2,28 @@ use std::collections::HashMap;
 
 pub fn run(input: &str, _: &crate::Options) -> anyhow::Result<String> {
     let monkeys = parse(input);
-    let v = sim(&monkeys, 20);
-    let p1 = v[0] * v[1];
-    Ok(format!("{} {}", p1, ""))
+    let p1 = sim(&monkeys, 3, 20);
+    let p2 = sim(&monkeys, 1, 10000);
+    Ok(format!("{} {}", p1, p2))
 }
 
 fn parse(input: &str) -> Vec<Monkey> {
     input.split("\n\n").filter_map(Monkey::parse).collect()
 }
 
-fn sim(horde: &[Monkey], n: usize) -> Vec<usize> {
+fn sim(horde: &[Monkey], wdiv: usize, n: usize) -> usize {
     let mut horde = horde.to_vec();
+    let ring: usize = horde.iter().map(|m| m.div).product();
     let mut inspects = HashMap::new();
     for _ in 0..n {
-        round(&mut horde, &mut inspects);
+        round(&mut horde, ring, wdiv, &mut inspects);
     }
     let mut v: Vec<usize> = inspects.values().copied().collect();
     v.sort_by_key(|x| std::cmp::Reverse(*x));
-    v
+    v[0] * v[1]
 }
 
-fn round(horde: &mut [Monkey], inspects: &mut HashMap<usize, usize>) {
+fn round(horde: &mut [Monkey], ring: usize, wdiv: usize, inspects: &mut HashMap<usize, usize>) {
     for i in 0..horde.len() {
         let v = horde[i].items.split_off(0);
         inspects
@@ -31,7 +32,7 @@ fn round(horde: &mut [Monkey], inspects: &mut HashMap<usize, usize>) {
             .or_insert(v.len());
         for item in v {
             let m = &horde[i];
-            let n = m.op.apply(item) / 3;
+            let n = (m.op.apply(item) % ring) / wdiv;
             let j = if n % m.div == 0 {
                 m.if_true
             } else {
@@ -45,9 +46,9 @@ fn round(horde: &mut [Monkey], inspects: &mut HashMap<usize, usize>) {
 #[derive(Debug, Clone)]
 struct Monkey {
     num: usize,
-    items: Vec<i32>,
+    items: Vec<usize>,
     op: Op,
-    div: i32,
+    div: usize,
     if_true: usize,
     if_false: usize,
 }
@@ -62,7 +63,7 @@ impl Monkey {
             if_true: 0,
             if_false: 0,
         };
-        let mut mask: i32 = 0;
+        let mut mask: u32 = 0;
         for line in input.trim().lines().map(|x| x.trim()) {
             if let Some(s) = line.strip_prefix("Monkey ") {
                 monkey.num = s.trim_end_matches(':').parse().ok()?;
@@ -100,13 +101,13 @@ impl Monkey {
 
 #[derive(Debug, Copy, Clone)]
 enum Op {
-    Add(i32),
-    Mul(i32),
+    Add(usize),
+    Mul(usize),
     Square,
 }
 
 impl Op {
-    fn apply(&self, n: i32) -> i32 {
+    fn apply(&self, n: usize) -> usize {
         match *self {
             Op::Add(m) => n + m,
             Op::Mul(m) => n * m,
