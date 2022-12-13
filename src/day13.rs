@@ -5,32 +5,43 @@ pub fn run(input: &str, _: &crate::Options) -> Result<String> {
     let trees = parse(input)?;
 
     let p1 = check_sort(&trees);
-    let p2 = "";
+    let p2 = decoder_key(&trees);
     Ok(format!("{} {}", p1, p2))
 }
 
-fn check_sort(pairs: &[(Tree, Tree)]) -> usize {
-    pairs
-        .iter()
+fn check_sort(trees: &[Tree]) -> usize {
+    trees
+        .chunks(2)
         .enumerate()
-        .filter_map(|(i, (l, r))| Tree::order_ok(l, r).then_some(i + 1))
+        .filter_map(|(i, v)| (v.len() == 2 && Tree::order_ok(&v[0], &v[1])).then_some(i + 1))
         .sum()
 }
 
-fn parse(input: &str) -> Result<Vec<(Tree, Tree)>> {
-    let mut v = Vec::new();
-    let mut it = input.lines();
-    loop {
-        let l = it.next();
-        let r = it.next();
-        if l.is_none() || r.is_none() {
-            break;
-        }
-        it.next();
+fn decoder_key(trees: &[Tree]) -> usize {
+    let mut v = Vec::from(trees);
+    let divider = |n| Tree::List(vec![Tree::List(vec![Tree::Num(n)])]);
+    let d2 = divider(2);
+    let d6 = divider(6);
+    v.push(d2.clone());
+    v.push(d6.clone());
+    v.sort();
 
-        v.push((Tree::parse(l.unwrap())?, Tree::parse(r.unwrap())?));
-    }
-    Ok(v)
+    let idx = |item| {
+        v.iter()
+            .enumerate()
+            .find(|(_, x)| x == &item)
+            .map(|(i, _)| i + 1)
+            .unwrap()
+    };
+    idx(&d2) * idx(&d6)
+}
+
+fn parse(input: &str) -> Result<Vec<Tree>> {
+    input
+        .lines()
+        .filter(|line| !line.is_empty())
+        .map(Tree::parse)
+        .collect()
 }
 
 #[derive(Debug, Eq, Clone)]
