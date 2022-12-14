@@ -1,5 +1,4 @@
-use anyhow::{anyhow, Result};
-use std::cmp::{max, min};
+use anyhow::Result;
 
 pub fn run(input: &str, _: &crate::Options) -> Result<String> {
     let (p1, _) = sim_drops(input, false)?;
@@ -7,156 +6,75 @@ pub fn run(input: &str, _: &crate::Options) -> Result<String> {
     Ok(format!("{} {}", p1, p2))
 }
 
+type Map = crate::quadmap::Map<u8>;
+
 fn sim_drops(input: &str, floor: bool) -> Result<(usize, Map)> {
-    let mut m = Map::parse(input, floor).ok_or_else(|| anyhow!("invalid input"))?;
+    let mut m = parse(input);
+    let floor = floor.then_some(m.bounds().max.1 + 1);
     let mut n = 0;
-    while m.drop((SX, 0)) {
+    while drop(&mut m, (SX, 0), floor) {
         n += 1;
     }
     Ok((n, m))
 }
 
-#[derive(Debug, Clone)]
-struct Map {
-    bounds: Rect,
-    stride: i32,
-    v: Vec<u8>,
+// drop sand, returns true if it stays in the area
+fn drop(m: &mut Map, p: (i32, i32), floor: Option<i32>) -> bool {
+    let mut p = p;
+
+    if m.at((p.0, p.1)) != &EMPTY {
+        return false; // no more space
+    }
+
+    let ystop = match floor {
+        Some(y) => y - 1,
+        None => m.bounds().max.1,
+    };
+
+    loop {
+        if p.1 == ystop {
+            if floor.is_some() {
+                *m.at_mut(p) = SAND;
+                return true;
+            } else {
+                return false; // fallen outside
+            }
+        }
+
+        let y = p.1 + 1;
+        if m.at((p.0, y)) == &EMPTY {
+            p.1 = y;
+        } else if m.at((p.0 - 1, y)) == &EMPTY {
+            p = (p.0 - 1, y);
+        } else if m.at((p.0 + 1, y)) == &EMPTY {
+            p = (p.0 + 1, y);
+        } else {
+            *m.at_mut(p) = SAND;
+            return true;
+        }
+    }
 }
 
 const SX: i32 = 500;
+const EMPTY: u8 = 0;
+const WALL: u8 = 1;
+const SAND: u8 = 2;
 
-impl Map {
-    fn parse(input: &str, floor: bool) -> Option<Self> {
-        let mut bounds = Self::src_dim(input)?;
-        bounds.min.1 = 0;
-        if floor {
-            bounds.max.1 += 2;
-            let df = bounds.max.1;
-            bounds.min.0 = min(SX - df, bounds.min.0);
-            bounds.max.0 = max(SX + df, bounds.max.0);
-        }
-        let dx = bounds.max.0 - bounds.min.0 + 1;
-        let dy = bounds.max.1 - bounds.min.1 + 1;
-        let v = vec![b'.'; (dx * dy) as usize];
-        let mut r = Self {
-            bounds,
-            stride: dx,
-            v,
-        };
-        segments(input).for_each(|seg| r.add_seg(&seg));
-        if floor {
-            let y = bounds.max.1;
-            r.add_seg(&Segment {
-                a: (bounds.min.0, y),
-                b: (bounds.max.0, y),
-            });
-        }
-        Some(r)
-    }
-
-    // drop sand, returns true if it stays in the area
-    fn drop(&mut self, p: (i32, i32)) -> bool {
-        let mut p = p;
-
-        if self.at((p.0, p.1)) != b'.' {
-            return false; // no more space
-        }
-
-        loop {
-            if p.1 > self.bounds.max.1 {
-                return false; // fallen outside
-            }
-
-            let y = p.1 + 1;
-            if self.at((p.0, y)) == b'.' {
-                p.1 = y;
-            } else if self.at((p.0 - 1, y)) == b'.' {
-                p = (p.0 - 1, y);
-            } else if self.at((p.0 + 1, y)) == b'.' {
-                p = (p.0 + 1, y);
-            } else {
-                if let Some(i) = self.pos(p) {
-                    self.v[i] = b'o';
-                }
-                return true;
-            }
-        }
-    }
-
-    fn at(&self, p: (i32, i32)) -> u8 {
-        self.pos(p).map_or(b'.', |i| self.v[i])
-    }
-
-    fn show(&self) {
-        println!("{}", self.to_str());
-    }
-
-    fn to_str(&self) -> String {
-        let mut acc = String::new();
-        self.v.chunks(self.stride as usize).for_each(|row| {
-            acc.push_str(&format!("{}\n", String::from_utf8_lossy(row)));
-        });
-        acc
-    }
-
-    fn add_seg(&mut self, seg: &Segment) {
-        let a = seg.a;
-        let b = seg.b;
-        if a.1 == b.1 {
-            let lo = self.pos((min(a.0, b.0), a.1)).unwrap();
-            let hi = self.pos((max(a.0, b.0), a.1)).unwrap();
-            for p in lo..=hi {
-                self.v[p] = b'#';
-            }
-        } else if a.0 == b.0 {
-            let lo = self.pos((a.0, min(a.1, b.1))).unwrap();
-            let hi = self.pos((a.0, max(a.1, b.1))).unwrap();
-            for p in (lo..=hi).step_by(self.stride as usize) {
-                self.v[p] = b'#';
-            }
-        } else {
-            panic!("invalid segment")
-        }
-    }
-
-    fn pos(&self, p: (i32, i32)) -> Option<usize> {
-        let b = &self.bounds;
-        b.contains(p)
-            .then_some((p.0 - b.min.0 + (p.1 - b.min.1) * self.stride) as usize)
-    }
-
-    fn src_dim(input: &str) -> Option<Rect> {
-        let mut dim: Option<Rect> = None;
-        for seg in segments(input) {
-            Self::extend(&mut dim, seg.a);
-            Self::extend(&mut dim, seg.b);
-        }
-        dim
-    }
-
-    fn extend(ob: &mut Option<Rect>, p: (i32, i32)) {
-        *ob = Some(match ob {
-            Some(r) => Rect {
-                min: (min(r.min.0, p.0), min(r.min.1, p.1)),
-                max: (max(r.max.0, p.0), max(r.max.1, p.1)),
-            },
-            None => Rect {
-                min: (p.0, p.1),
-                max: (p.0, p.1),
-            },
-        })
-    }
+fn parse(input: &str) -> Map {
+    let mut m = Map::new(EMPTY);
+    segments(input).for_each(|seg| add_segment(&mut m, &seg));
+    m
 }
 
-#[derive(Debug, Copy, Clone)]
-struct Rect {
-    min: (i32, i32),
-    max: (i32, i32),
-}
-
-impl Rect {
-    fn contains(&self, p: (i32, i32)) -> bool {
-        (self.min.0..=self.max.0).contains(&p.0) && (self.min.1..=self.max.1).contains(&p.1)
+fn add_segment(map: &mut Map, seg: &Segment) {
+    let a = seg.a;
+    let b = seg.b;
+    if a.1 == b.1 {
+        map.hline(a.0, b.0, a.1, &WALL);
+    } else if a.0 == b.0 {
+        map.vline(a.0, a.1, b.1, &WALL);
+    } else {
+        panic!("invalid segment")
     }
 }
 
@@ -197,7 +115,7 @@ mod test {
 ";
         let t = |floor| {
             if let Ok(r) = sim_drops(sample, floor) {
-                r.1.show();
+                show(&r.1);
                 r.0
             } else {
                 0
@@ -206,5 +124,13 @@ mod test {
 
         assert_eq!(t(false), 24);
         assert_eq!(t(true), 93);
+    }
+
+    fn show(_map: &Map) {
+        /*
+        map.v.chunks(map.stride as usize).for_each(|row| {
+            println!("{}", String::from_utf8_lossy(row));
+        });
+        */
     }
 }

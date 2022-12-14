@@ -38,6 +38,8 @@ fn day_funcs() -> Vec<DayFunc> {
     ]
 }
 
+mod quadmap;
+
 mod util;
 use util::InputSource;
 
