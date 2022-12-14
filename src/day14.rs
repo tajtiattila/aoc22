@@ -2,19 +2,18 @@ use anyhow::{anyhow, Result};
 use std::cmp::{max, min};
 
 pub fn run(input: &str, _: &crate::Options) -> Result<String> {
-    let m = Map::parse(input).ok_or_else(|| anyhow!("invalid input"))?;
-    let p1 = count_drops(&m);
-    let p2 = "";
+    let (p1, _) = sim_drops(input, false)?;
+    let (p2, _) = sim_drops(input, true)?;
     Ok(format!("{} {}", p1, p2))
 }
 
-fn count_drops(m: &Map) -> usize {
-    let mut m = m.clone();
+fn sim_drops(input: &str, floor: bool) -> Result<(usize, Map)> {
+    let mut m = Map::parse(input, floor).ok_or_else(|| anyhow!("invalid input"))?;
     let mut n = 0;
-    while m.drop((500, 0)) {
+    while m.drop((SX, 0)) {
         n += 1;
     }
-    n
+    Ok((n, m))
 }
 
 #[derive(Debug, Clone)]
@@ -24,10 +23,18 @@ struct Map {
     v: Vec<u8>,
 }
 
+const SX: i32 = 500;
+
 impl Map {
-    fn parse(input: &str) -> Option<Self> {
+    fn parse(input: &str, floor: bool) -> Option<Self> {
         let mut bounds = Self::src_dim(input)?;
         bounds.min.1 = 0;
+        if floor {
+            bounds.max.1 += 2;
+            let df = bounds.max.1;
+            bounds.min.0 = min(SX - df, bounds.min.0);
+            bounds.max.0 = max(SX + df, bounds.max.0);
+        }
         let dx = bounds.max.0 - bounds.min.0 + 1;
         let dy = bounds.max.1 - bounds.min.1 + 1;
         let v = vec![b'.'; (dx * dy) as usize];
@@ -37,6 +44,13 @@ impl Map {
             v,
         };
         segments(input).for_each(|seg| r.add_seg(&seg));
+        if floor {
+            let y = bounds.max.1;
+            r.add_seg(&Segment {
+                a: (bounds.min.0, y),
+                b: (bounds.max.0, y),
+            });
+        }
         Some(r)
     }
 
@@ -181,8 +195,16 @@ mod test {
 498,4 -> 498,6 -> 496,6
 503,4 -> 502,4 -> 502,9 -> 494,9
 ";
-        let m = Map::parse(sample).unwrap();
-        m.show();
-        assert_eq!(count_drops(&m), 24);
+        let t = |floor| {
+            if let Ok(r) = sim_drops(sample, floor) {
+                r.1.show();
+                r.0
+            } else {
+                0
+            }
+        };
+
+        assert_eq!(t(false), 24);
+        assert_eq!(t(true), 93);
     }
 }
