@@ -21,14 +21,16 @@ fn count_no_beacon(rdg: &[Sensor], yline: i32) -> usize {
 }
 
 fn scan_beacon(rdg: &[Sensor], max: i32) -> Option<usize> {
-    (0..=max).find_map(|y| scan_line(rdg, y, max))
-}
-
-fn scan_line(rdg: &[Sensor], y: i32, max: i32) -> Option<usize> {
-    rdg_spans(rdg, y)
-        .map(|s| s.1)
-        .find(|x| (0..=max).contains(x))
-        .map(|x| (x as usize) * 4000000 + (y as usize))
+    rdg.iter()
+        .flat_map(|s0| {
+            s0.boundary().filter(|&p| {
+                (0..=max).contains(&p.0)
+                    && (0..=max).contains(&p.1)
+                    && rdg.iter().all(|s1| !s1.is_seen(p))
+            })
+        })
+        .next()
+        .map(|(x, y)| (x as usize) * 4000000 + (y as usize))
 }
 
 fn rdg_spans(rdg: &[Sensor], yline: i32) -> impl Iterator<Item = (i32, i32)> {
@@ -72,29 +74,45 @@ fn spans_merged(spans: &[(i32, i32)]) -> impl Iterator<Item = (i32, i32)> {
 
 //Sensor at x=1054910, y=811769: closest beacon is at x=2348729, y=1239977
 fn parse(input: &str) -> Vec<Sensor> {
-    input
-        .lines()
-        .filter_map(parse_line)
-        .map(|(s, b)| Sensor {
-            p: s,
-            range: manhattan(s, b),
-        })
-        .collect()
-}
-
-fn parse_line(line: &str) -> Option<((i32, i32), (i32, i32))> {
-    let mut it = line
-        .split(' ')
-        .filter_map(|s| s.strip_prefix("x=").or_else(|| s.strip_prefix("y=")))
-        .map(|s| s.trim_end_matches(|c| c == ',' || c == ':'))
-        .filter_map(|s| s.parse::<i32>().ok());
-    Some(((it.next()?, it.next()?), (it.next()?, it.next()?)))
+    input.lines().filter_map(Sensor::parse).collect()
 }
 
 #[derive(Debug)]
 struct Sensor {
     p: (i32, i32),
     range: i32,
+}
+
+impl Sensor {
+    fn parse(line: &str) -> Option<Sensor> {
+        let mut it = line
+            .split(' ')
+            .filter_map(|s| s.strip_prefix("x=").or_else(|| s.strip_prefix("y=")))
+            .map(|s| s.trim_end_matches(|c| c == ',' || c == ':'))
+            .filter_map(|s| s.parse::<i32>().ok());
+        let s = (it.next()?, it.next()?);
+        let b = (it.next()?, it.next()?);
+        Some(Sensor {
+            p: s,
+            range: manhattan(s, b),
+        })
+    }
+
+    fn is_seen(&self, b: (i32, i32)) -> bool {
+        manhattan(self.p, b) <= self.range
+    }
+
+    /// Return an iterator over the positions just outside the sensor range.
+    fn boundary(&self) -> impl Iterator<Item = (i32, i32)> {
+        let (x, y) = self.p;
+        let r = self.range + 1;
+
+        let a = (0..r).map(move |i| (x - (r - i), y - i));
+        let b = (0..r).map(move |i| (x + (r - i), y + i));
+        let c = (0..r).map(move |i| (x - i, y + (r - i)));
+        let d = (0..r).map(move |i| (x + i, y - (r - i)));
+        a.chain(b).chain(c).chain(d)
+    }
 }
 
 fn manhattan(p: (i32, i32), q: (i32, i32)) -> i32 {
