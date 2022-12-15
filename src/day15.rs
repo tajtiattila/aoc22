@@ -1,36 +1,46 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use itertools::Itertools;
 use std::collections::HashMap;
 
-pub fn run(input: &str, _: &crate::Options) -> Result<String> {
+pub fn run(input: &str, o: &crate::Options) -> Result<String> {
     let rdg = parse(input);
+    if o.verbose {
+        for s in &rdg {
+            println!("({},{}) range {}", s.p.0, s.p.1, s.range);
+        }
+    }
     let p1 = count_no_beacon(&rdg, 2000000);
-    let p2 = "";
+    let p2 = scan_beacon(&rdg, 4000000).ok_or_else(|| anyhow!("not found"))?;
     Ok(format!("{} {}", p1, p2))
 }
 
-fn count_no_beacon(rdg: &Reading, yline: i32) -> usize {
+fn count_no_beacon(rdg: &[Sensor], yline: i32) -> usize {
+    rdg_spans(rdg, yline)
+        .map(|(lo, hi)| (hi - 1 - lo) as usize)
+        .sum()
+}
+
+fn scan_beacon(rdg: &[Sensor], max: i32) -> Option<usize> {
+    (0..=max).find_map(|y| scan_line(rdg, y, max))
+}
+
+fn scan_line(rdg: &[Sensor], y: i32, max: i32) -> Option<usize> {
+    rdg_spans(rdg, y)
+        .map(|s| s.1)
+        .find(|x| (0..=max).contains(x))
+        .map(|x| (x as usize) * 4000000 + (y as usize))
+}
+
+fn rdg_spans(rdg: &[Sensor], yline: i32) -> impl Iterator<Item = (i32, i32)> {
     let mut v = Vec::new();
-    for s in &rdg.sensor {
+    for s in rdg {
         let width = s.range - (s.p.1 - yline).abs();
         if width > 0 {
             v.push((s.p.0 - width, s.p.0 + width));
         }
     }
 
-    let mut count = 0;
-    for (lo, hi) in spans_merged(&v) {
-        /*
-        let beacons = rdg
-            .beacon
-            .iter()
-            .filter(|(x, y)| y == &yline && (lo..hi).contains(x))
-            .count();
-        count += (hi - lo) as usize - beacons;
-            */
-        count += (hi - 1 - lo) as usize;
-    }
-    count
+    spans_merged(&v)
 }
 
 fn spans_merged(spans: &[(i32, i32)]) -> impl Iterator<Item = (i32, i32)> {
@@ -61,36 +71,24 @@ fn spans_merged(spans: &[(i32, i32)]) -> impl Iterator<Item = (i32, i32)> {
 }
 
 //Sensor at x=1054910, y=811769: closest beacon is at x=2348729, y=1239977
-fn parse(input: &str) -> Reading {
-    let mut sensor = Vec::new();
-    let mut beacon = Vec::new();
-
-    for (sx, sy, bx, by) in input.lines().filter_map(parse_line) {
-        let s = (sx, sy);
-        let b = (bx, by);
-        sensor.push(Sensor {
+fn parse(input: &str) -> Vec<Sensor> {
+    input
+        .lines()
+        .filter_map(parse_line)
+        .map(|(s, b)| Sensor {
             p: s,
             range: manhattan(s, b),
-        });
-        beacon.push(b);
-    }
-
-    Reading { sensor, beacon }
+        })
+        .collect()
 }
 
-fn parse_line(line: &str) -> Option<(i32, i32, i32, i32)> {
+fn parse_line(line: &str) -> Option<((i32, i32), (i32, i32))> {
     let mut it = line
         .split(' ')
         .filter_map(|s| s.strip_prefix("x=").or_else(|| s.strip_prefix("y=")))
         .map(|s| s.trim_end_matches(|c| c == ',' || c == ':'))
         .filter_map(|s| s.parse::<i32>().ok());
-    Some((it.next()?, it.next()?, it.next()?, it.next()?))
-}
-
-#[derive(Debug)]
-struct Reading {
-    sensor: Vec<Sensor>,
-    beacon: Vec<(i32, i32)>,
+    Some(((it.next()?, it.next()?), (it.next()?, it.next()?)))
 }
 
 #[derive(Debug)]
@@ -135,5 +133,6 @@ Sensor at x=20, y=1: closest beacon is at x=15, y=3
 ";
         let rdg = parse(sample);
         assert_eq!(count_no_beacon(&rdg, 10), 26);
+        assert_eq!(scan_beacon(&rdg, 20), Some(56000011));
     }
 }
