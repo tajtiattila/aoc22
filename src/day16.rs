@@ -4,22 +4,32 @@ use std::collections::HashMap;
 
 pub fn run(input: &str, o: &crate::Options) -> Result<String> {
     let rdg = parse(input)?;
-    let p1 = most_pressure_release(&rdg, o.verbose)?;
+    let working = working_valves(&rdg);
+    for v in &working {
+        print!(" {} rate={:2}   ", v.label, v.rate);
+        for (i, (j, d)) in v.next.iter().enumerate() {
+            print!(
+                "{}{}:{}",
+                (i != 0).then_some(", ").unwrap_or_default(),
+                working[*j].label,
+                d
+            );
+        }
+        println!();
+    }
+    let p1 = most_pressure_release(&working, o.verbose)?;
     let p2 = "";
     Ok(format!("{} {}", p1, p2))
 }
 
-fn most_pressure_release(rdg: &[Valve], verbose: bool) -> Result<i32> {
-    let nsteps = &map_nsteps(rdg);
+fn most_pressure_release(wv: &[WorkValve], verbose: bool) -> Result<i32> {
     const MINUTES: i32 = 30;
     bfs_reach(Node::new(0), |&from| {
-        let nsteps = &nsteps[from.index];
-        nsteps
+        let node = &wv[from.index];
+        node.next
             .iter()
-            .enumerate()
-            .filter_map(move |(i, dist)| {
-                (!(dist.is_none() || dist == &Some(0) || rdg[i].rate == 0 || from.is_open(i)))
-                    .then_some(from.goto(i, dist.unwrap(), rdg[i].rate))
+            .filter_map(move |&(i, dist)| {
+                (!from.is_open(i)).then_some(from.goto(i, dist, wv[i].rate))
             })
             .filter(|next| next.time < MINUTES)
     })
@@ -29,7 +39,7 @@ fn most_pressure_release(rdg: &[Valve], verbose: bool) -> Result<i32> {
         if verbose {
             println!(
                 " {} {:2} {:4} ({}) -> {}",
-                rdg[n.index].label, n.time, n.released, n.rate, total
+                wv[n.index].label, n.time, n.released, n.rate, total
             );
         }
         total
@@ -75,14 +85,71 @@ impl Node {
     }
 }
 
-fn map_nsteps(rdg: &[Valve]) -> Vec<Vec<Option<i32>>> {
+#[derive(Debug, Eq, PartialEq, Hash, Clone, Copy)]
+struct Elef {
+    a: Agent,
+    b: Agent,
+
+    time: i32, // minutes elapsed
+    open: u64, // valves opened so far
+
+    rate: i32,     // current release rate
+    released: i32, // pressure released so far
+}
+
+#[derive(Debug, Eq, PartialEq, Hash, Clone, Copy)]
+struct Agent {
+    loc: usize,
+    ttg: i32, // time to go
+}
+
+// a working valve
+struct WorkValve {
+    label: String,
+    rate: i32,
+    next: Vec<(usize, i32)>, // index and dist. of rooms with wotking valves
+}
+
+fn working_valves(rdg: &[Valve]) -> Vec<WorkValve> {
+    let nsteps = &map_nsteps(rdg);
+
+    let mut vidx = Vec::new();
+    vidx.resize(rdg.len(), usize::max_value());
+    rdg.iter()
+        .enumerate()
+        .filter_map(|(i, v)| (i == 0 || v.rate != 0).then_some(i))
+        .enumerate()
+        .for_each(|(new_idx, i)| vidx[i] = new_idx);
+
+    rdg.iter()
+        .enumerate()
+        .filter(|(i, v)| i == &0 || v.rate != 0)
+        .map(|(i, v)| {
+            let mut next: Vec<_> = nsteps[i]
+                .iter()
+                .enumerate()
+                .filter_map(|(old_idx, dist)| {
+                    (i != old_idx && rdg[old_idx].rate != 0).then_some((vidx[old_idx], *dist))
+                })
+                .collect();
+            next.sort_by_key(|(_, d)| *d);
+            WorkValve {
+                label: v.label.clone(),
+                rate: v.rate,
+                next,
+            }
+        })
+        .collect()
+}
+
+fn map_nsteps(rdg: &[Valve]) -> Vec<Vec<i32>> {
     (0..rdg.len()).map(|i| calc_nsteps(rdg, i)).collect()
 }
 
-fn calc_nsteps(rdg: &[Valve], i: usize) -> Vec<Option<i32>> {
+fn calc_nsteps(rdg: &[Valve], i: usize) -> Vec<i32> {
     let mut v = Vec::new();
-    v.resize(rdg.len(), None);
-    v[i] = Some(0);
+    v.resize(rdg.len(), i32::max_value());
+    v[i] = 0;
     let mut acc = vec![i];
     let mut dist = 1;
     while !acc.is_empty() {
@@ -90,8 +157,8 @@ fn calc_nsteps(rdg: &[Valve], i: usize) -> Vec<Option<i32>> {
         acc = Vec::new();
         for i in w {
             for &j in &rdg[i].next {
-                if v[j].is_none() {
-                    v[j] = Some(dist);
+                if v[j] == i32::max_value() {
+                    v[j] = dist;
                     acc.push(j);
                 }
             }
@@ -141,7 +208,7 @@ fn parse(input: &str) -> Result<Vec<Valve>> {
 struct Valve {
     label: String,
     rate: i32,
-    next: Vec<usize>, // index of rooms
+    next: Vec<usize>, // index of adjacent rooms
 }
 
 fn parse_valve(s: &str) -> Option<(&str, i32, impl Iterator<Item = &str>)> {
@@ -187,11 +254,13 @@ Valve JJ has flow rate=21; tunnel leads to valve II
 
         for r in map_nsteps(&rdg) {
             for c in r {
-                print!(" {}", c.map(|v| format!("{:3}", v)).unwrap_or_default());
+                print!(" {:3}", c)
             }
             println!();
         }
 
-        assert_eq!(most_pressure_release(&rdg, true).ok(), Some(1651));
+        let working = working_valves(&rdg);
+
+        assert_eq!(most_pressure_release(&working, true).ok(), Some(1651));
     }
 }
