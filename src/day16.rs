@@ -1,69 +1,109 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use pathfinding::prelude::bfs_reach;
 use std::collections::HashMap;
 
 pub fn run(input: &str, o: &crate::Options) -> Result<String> {
     let rdg = parse(input)?;
     let working = working_valves(&rdg);
-    for v in &working {
-        print!(" {} rate={:2}   ", v.label, v.rate);
-        for (i, (j, d)) in v.next.iter().enumerate() {
-            print!(
-                "{}{}:{}",
-                (i != 0).then_some(", ").unwrap_or_default(),
-                working[*j].label,
-                d
-            );
+    if o.verbose {
+        for v in &working {
+            print!(" {} rate={:2}   ", v.label, v.rate);
+            for (i, (j, d)) in v.next.iter().enumerate() {
+                print!(
+                    "{}{}:{}",
+                    (i != 0).then_some(", ").unwrap_or_default(),
+                    working[*j].label,
+                    d
+                );
+            }
+            println!();
         }
-        println!();
     }
-    let p1 = most_pressure_release(&working, o.verbose)?;
-    let p2 = "";
+    let p1 = pressure_release_1(&working, o.verbose)?;
+    let p2 = pressure_release_2(&working, o.verbose)?;
     Ok(format!("{} {}", p1, p2))
 }
 
-fn most_pressure_release(wv: &[WorkValve], verbose: bool) -> Result<i32> {
-    const MINUTES: i32 = 30;
-    bfs_reach(Node::new(0), |&from| {
+fn pressure_release_1(wv: &[WorkValve], _verbose: bool) -> Result<i32> {
+    const TIME: i32 = 30;
+    pressure_release_impl(wv, TIME, 0)
+        .map(|n| n.released)
+        .max()
+        .ok_or_else(|| anyhow!("pressure release failed"))
+}
+
+fn pressure_release_2(wv: &[WorkValve], verbose: bool) -> Result<i32> {
+    const TIME: i32 = 26;
+    let max_rate: i32 = wv.iter().map(|v| v.rate).sum();
+    if verbose {
+        println!("max. rate: {}", max_rate);
+    }
+    let mut fst = pressure_release_impl(wv, TIME, 0)
+        .map(|n| (n.open, n.released))
+        .collect::<Vec<_>>();
+    fst.sort_by_key(|x| std::cmp::Reverse(x.1));
+    if verbose {
+        println!("result size: {}", fst.len());
+    }
+
+    let mut bestr = 0;
+    for (i, x) in fst.iter().enumerate() {
+        let (xo, xr) = *x;
+        if xr < bestr / 2 {
+            break;
+        }
+
+        for y in fst.iter().skip(i + 1) {
+            let (yo, yr) = *y;
+            let r = xr + yr;
+            if r <= bestr {
+                break;
+            }
+
+            if (xo & yo) == 0 {
+                bestr = r;
+            }
+        }
+    }
+    if bestr == 0 {
+        bail!("pressure release failed");
+    }
+
+    Ok(bestr)
+}
+
+fn pressure_release_impl(
+    wv: &[WorkValve],
+    time: i32,
+    start_open: u32,
+) -> impl Iterator<Item = Node> + '_ {
+    bfs_reach(Node::new(time, start_open), move |&from| {
         let node = &wv[from.index];
         node.next
             .iter()
             .filter_map(move |&(i, dist)| {
                 (!from.is_open(i)).then_some(from.goto(i, dist, wv[i].rate))
             })
-            .filter(|next| next.time < MINUTES)
+            .filter(|next| next.ttg > 0)
     })
-    .map(|n| {
-        let time_left = MINUTES - n.time;
-        let total = n.released + time_left * n.rate;
-        if verbose {
-            println!(
-                " {} {:2} {:4} ({}) -> {}",
-                wv[n.index].label, n.time, n.released, n.rate, total
-            );
-        }
-        total
-    })
-    .max()
-    .ok_or_else(|| anyhow!("pressure release failed"))
 }
 
 #[derive(Debug, Eq, PartialEq, Hash, Clone, Copy)]
 struct Node {
     index: usize,
-    time: i32, // minutes elapsed
-    open: u64, // valves opened so far
+    ttg: i32,  // minutes remaining
+    open: u32, // valves opened so far
 
     rate: i32,     // current release rate
     released: i32, // pressure released so far
 }
 
 impl Node {
-    fn new(index: usize) -> Node {
+    fn new(ttg: i32, open: u32) -> Node {
         Node {
-            index,
-            time: 0,
-            open: 0,
+            index: 0,
+            ttg,
+            open,
             rate: 0,
             released: 0,
         }
@@ -73,10 +113,10 @@ impl Node {
         let time = dist + 1; // time to move and open valve
         Node {
             index,
-            time: self.time + time,
+            ttg: self.ttg - time,
             open: self.open | (1 << index),
             rate: self.rate + rate,
-            released: self.released + time * self.rate,
+            released: self.released + (self.ttg - time) * rate,
         }
     }
 
@@ -261,6 +301,7 @@ Valve JJ has flow rate=21; tunnel leads to valve II
 
         let working = working_valves(&rdg);
 
-        assert_eq!(most_pressure_release(&working, true).ok(), Some(1651));
+        assert_eq!(pressure_release_1(&working, true).ok(), Some(1651));
+        assert_eq!(pressure_release_2(&working, true).ok(), Some(1707));
     }
 }
