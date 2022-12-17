@@ -34,6 +34,7 @@ dependencies = [
  "clap",
  "directories",
  "itertools",
+ "once_cell",
  "pathfinding",
  "reqwest",
 ]
