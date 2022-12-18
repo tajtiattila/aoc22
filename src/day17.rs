@@ -1,17 +1,17 @@
 use anyhow::Result;
-use once_cell::sync::Lazy;
 
 pub fn run(input: &str, _: &crate::Options) -> Result<String> {
     println!("len: {}", input.trim().len());
-    let p1 = tower_height(input, 7, 2022);
+    let p1 = tower_height(input, 2022);
     // 1566227410342 too low
-    let p2 = tower_height(input, 7, 1000000000000);
+    let p2 = tower_height(input, 1000000000000);
     Ok(format!("{} {}", p1, p2))
 }
 
-fn tower_height(input: &str, width: i32, nrocks: usize) -> usize {
-    let mut s = towersim(width, input);
-    let rept = ROCKS.len() * input.trim().len();
+fn tower_height(input: &str, nrocks: usize) -> usize {
+    let wind_len = Wind::iter(input).count();
+    let mut s = Sim::from(Wind::iter(input).cycle());
+    let rept = rocks().len() * wind_len;
 
     println!("{} {}", nrocks, rept);
     if rept > nrocks {
@@ -25,7 +25,7 @@ fn tower_height(input: &str, width: i32, nrocks: usize) -> usize {
 
     let mut irept = rept;
 
-    let sig = s.chamber.signature();
+    let sig = s.sig();
 
     let mut mid = 0;
     loop {
@@ -38,7 +38,7 @@ fn tower_height(input: &str, width: i32, nrocks: usize) -> usize {
         irept += rept;
         mid += 1;
 
-        if s.chamber.signature() == sig {
+        if s.sig() == sig {
             break;
         }
     }
@@ -57,215 +57,277 @@ fn tower_height(input: &str, width: i32, nrocks: usize) -> usize {
     a_height + b_times * b_height + c_height
 }
 
-struct TowerSim<IT: Iterator<Item = i32>> {
-    chamber: Chamber,
-    irock: usize,
-    wind: IT,
-}
-
-fn towersim(width: i32, input: &str) -> TowerSim<impl Iterator<Item = i32> + '_> {
-    TowerSim {
-        chamber: Chamber::new(width),
-        irock: 0,
-        wind: input
-            .trim()
-            .chars()
-            .cycle()
-            .map(|c| if c == '<' { -1 } else { 1 }),
-    }
-}
-
-impl<IT: Iterator<Item = i32>> TowerSim<IT> {
-    fn height(&self) -> i32 {
-        self.chamber.height()
-    }
-
-    fn step_n(&mut self, n: usize) {
-        for _ in 0..n {
-            let (p, i) = self.next_rock();
-            let rocks = &ROCKS;
-            self.chamber.freeze_rock(p, &rocks[i]);
-        }
-    }
-
-    fn step_print_n(&mut self, n: usize, nmod: usize) {
-        for _ in 0..n {
-            let prt = self.irock % nmod == 0;
-            let (p, i) = self.next_rock();
-            let rocks = &ROCKS;
-            let rock = &rocks[i];
-            if prt {
-                println!("\nRock {}, Sig: {:x}", self.irock, self.chamber.signature());
-                self.chamber.print_with_rock(p, rock, 20);
-            }
-            self.chamber.freeze_rock(p, rock);
-        }
-    }
-
-    fn next_rock(&mut self) -> ((i32, i32), usize) {
-        let rocks = &ROCKS;
-        let i = self.irock % rocks.len();
-        self.irock += 1;
-
-        let rock = &rocks[i];
-        let (mut px, mut py) = self.chamber.rock_start(rock);
-        loop {
-            let nx = px + self.wind.next().unwrap();
-            if self.chamber.is_free((nx, py), rock) {
-                px = nx;
-            }
-            if self.chamber.is_free((px, py - 1), rock) {
-                py -= 1;
-            } else {
-                return ((px, py), i);
-            }
-        }
-    }
-}
-
-static ROCKS: Lazy<Vec<Rock>> = Lazy::new(rock_shapes);
-
 #[cfg(test)]
 mod test {
     use super::*;
 
     #[test]
     fn day17_works() {
-        let chamber = Chamber::new(7);
-        let rock = &rock_shapes()[0];
-        assert!(chamber.is_free((0, 0), rock));
-
         let sample = ">>><<><>><<<>><>>><<<>>><<<><<<>><>><<>>";
 
-        towersim(7, sample).step_print_n(10000, 200);
-        assert_eq!(tower_height(sample, 7, 2022), 3068);
-        assert_eq!(tower_height(sample, 7, 1000000000000), 1514285714288);
+        let mut sim = Sim::from(Wind::iter(sample).cycle());
+        for i in 0..2022 {
+            sim.step();
+            println!(
+                "\nRock {} (height={}):\n{}",
+                i,
+                sim.height,
+                sim.sig().render_lines()
+            );
+        }
+        assert_eq!(sim.height, 3068);
+
+        assert_eq!(tower_height(sample, 2022), 3068);
+        assert_eq!(tower_height(sample, 1000000000000), 1514285714288);
     }
 }
 
-#[derive(Debug, Clone)]
-struct Chamber {
-    dx: i32,
-    v: Vec<u8>,
-}
+const SIM_ROWS: usize = 64;
+const SIG_ROWS: usize = 16;
 
-impl Chamber {
-    fn new(dx: i32) -> Chamber {
-        Chamber { dx, v: vec![] }
-    }
+#[derive(Eq, PartialEq, Copy, Clone)]
+struct Sig([u8; SIG_ROWS]);
 
-    fn height(&self) -> i32 {
-        (self.v.len() as i32) / self.dx
-    }
-
-    fn rock_start(&self, _rock: &Rock) -> (i32, i32) {
-        (2, self.height() + 3)
-    }
-
-    fn is_free(&self, p: (i32, i32), rock: &Rock) -> bool {
-        let (px, py) = p;
-        if px < 0 || self.dx < px + rock.dx || py < 0 {
-            return false;
+impl Sig {
+    #[cfg(test)]
+    fn render_lines(&self) -> String {
+        let mut s = String::new();
+        s.reserve(self.0.len() * 10);
+        for row in self.0.iter().rev() {
+            s.push('│');
+            let mut bit = 0x40;
+            while bit != 0 {
+                s.push(if (row & bit) != 0 { '#' } else { '.' });
+                bit >>= 1;
+            }
+            s.push_str("│\n");
         }
-        rock.bits(p).all(|p| self.is_space(p))
-    }
-
-    fn freeze_rock(&mut self, p: (i32, i32), rock: &Rock) {
-        self.freeze_rock_impl(p, rock, b'#')
-    }
-
-    fn freeze_rock_impl(&mut self, p: (i32, i32), rock: &Rock, ch: u8) {
-        rock.bits(p).for_each(|p| self.set_rock(p, ch));
-    }
-
-    fn is_space(&self, p: (i32, i32)) -> bool {
-        let (px, py) = p;
-        if px < 0 || self.dx <= px || py < 0 {
-            return false;
-        }
-        let row = (py * self.dx) as usize;
-        if self.v.len() <= row {
-            return true;
-        }
-        self.v[row + px as usize] == b'.'
-    }
-
-    fn set_rock(&mut self, p: (i32, i32), ch: u8) {
-        let (px, py) = p;
-        if px < 0 || self.dx <= px || py < 0 {
-            panic!("invalid rock position {} {}", px, py);
-        }
-        let row = (py * self.dx) as usize;
-        let need_len = row + self.dx as usize;
-        if self.v.len() < need_len {
-            self.v.resize(need_len, b'.');
-        }
-        self.v[row + px as usize] = ch
-    }
-
-    fn print_with_rock(&self, p: (i32, i32), rock: &Rock, nlines: usize) {
-        let mut x = self.clone();
-        x.freeze_rock_impl(p, rock, b'@');
-        for (i, line) in x.v.chunks(x.dx as usize).enumerate().rev().take(nlines) {
-            println!("{:6}│{}│", i, std::str::from_utf8(line).unwrap());
-        }
-        println!("{:6}└{:─<width$}┘", "", "", width = self.dx as usize);
-    }
-
-    fn signature(&self) -> u128 {
-        self.v
-            .iter()
-            .rev()
-            .take(128)
-            .fold(0_u128, |acc, &c| acc << 1 | u128::from(c != b'.'))
+        s
     }
 }
 
+struct Sim<IT> {
+    rocks: Vec<Rock>, // rock shapes, bottom up
+
+    bits: [u8; SIM_ROWS], // top down
+
+    irock: usize,
+    height: usize,
+    wind_iter: IT,
+}
+
+impl<IT: Iterator<Item = Wind>> Sim<IT> {
+    fn from(wind_iter: IT) -> Sim<IT> {
+        let mut bits = [0; SIM_ROWS];
+        bits[SIM_ROWS - 1] = 0x7f;
+        Sim {
+            rocks: rocks(),
+            bits,
+            irock: 0,
+            height: 0,
+            wind_iter,
+        }
+    }
+
+    fn height(&self) -> usize {
+        self.height
+    }
+
+    fn step_n(&mut self, n_rocks: usize) {
+        for _ in 0..n_rocks {
+            self.step();
+        }
+    }
+
+    fn step(&mut self) {
+        let i = self.irock % self.rocks.len();
+        self.irock += 1;
+
+        let rock = self.rocks[i];
+        let mut falling = rock.shape;
+
+        let mut blow = |rock| self.wind_iter.next().unwrap().shift(rock);
+
+        // Blow falling rock four times before it can interfere with rocks at rest.
+        for _ in 0..4 {
+            falling = blow(falling);
+        }
+
+        let mut y_acc = self.height % SIM_ROWS;
+        let mut window_acc = 0_u32;
+
+        let mut next_window = || {
+            let y = y_acc;
+            y_acc = (y_acc + SIM_ROWS - 1) % SIM_ROWS;
+            window_acc = window_acc << 8 | (self.bits[y_acc] as u32);
+            (y, window_acc)
+        };
+
+        // Check if the falling rock grows the tower.
+        for grow in 0..rock.nrows {
+            let (y, window) = next_window();
+            //println!("{}", rock_window_str(falling, window));
+            if window & falling != 0 {
+                self.grow(rock.nrows - grow);
+                self.add_rock(y, falling, rock.nrows);
+                return;
+            }
+            let next = blow(falling);
+            if window & next == 0 {
+                falling = next;
+            }
+        }
+
+        // Find falling rock position inside the existing tower.
+        for (y, window) in (rock.nrows..SIM_ROWS).map(|_| next_window()) {
+            //println!("{}", rock_window_str(falling, window));
+            if window & falling != 0 {
+                self.add_rock(y, falling, rock.nrows);
+                return;
+            }
+            let next = blow(falling);
+            if window & next == 0 {
+                falling = next;
+            }
+        }
+
+        panic!("SIM_ROWS too small for rock {}", self.irock);
+    }
+
+    fn sig(&self) -> Sig {
+        let mut s = [0; SIG_ROWS];
+        let p = self.height.wrapping_sub(SIG_ROWS) % SIM_ROWS;
+        let q = self.height % SIM_ROWS;
+        if p < q {
+            s.copy_from_slice(&self.bits[p..q]);
+        } else {
+            let ps = &self.bits[p..];
+            let qs = &self.bits[..q];
+            s[..ps.len()].copy_from_slice(ps);
+            s[ps.len()..].copy_from_slice(qs);
+        }
+        Sig(s)
+    }
+
+    fn grow(&mut self, nrows: usize) {
+        let mut y = self.height % SIM_ROWS;
+        for _ in 0..nrows {
+            self.bits[y] = 0;
+            y = (y + 1) % SIM_ROWS;
+        }
+        self.height += nrows;
+    }
+
+    fn add_rock(&mut self, y: usize, rock: u32, nrows: usize) {
+        let mut rock = rock;
+        let mut y = y;
+        for _ in 0..nrows {
+            let r = (rock & 0xFF) as u8;
+            assert_eq!(self.bits[y] & r, 0);
+            self.bits[y] |= r;
+            rock >>= 8;
+            y = (y + 1) % SIM_ROWS;
+        }
+    }
+}
+
+#[allow(dead_code)]
+fn rock_window_str(rock: u32, win: u32) -> String {
+    let mut s = String::new();
+    for i in (0..4).rev() {
+        let r = ((rock >> (i * 8)) & 0xFF) as u8;
+        let w = ((win >> (i * 8)) & 0xFF) as u8;
+        let x = r & w;
+        s.push('│');
+        for m in (0..7).rev().map(|i| 1_u8 << i) {
+            s.push(if x & m != 0 {
+                '@'
+            } else if r & m != 0 {
+                '#'
+            } else {
+                '.'
+            });
+        }
+
+        s.push_str("│  │");
+        for m in (0..7).rev().map(|i| 1_u8 << i) {
+            s.push(if x & m != 0 {
+                '@'
+            } else if w & m != 0 {
+                '#'
+            } else {
+                '.'
+            });
+        }
+        s.push_str("│\n");
+    }
+    s
+}
+
+fn rocks() -> Vec<Rock> {
+    vec![
+        Rock::from("####"),        // -
+        Rock::from(".#. ### .#."), // +
+        Rock::from("..# ..# ###"), // ┘
+        Rock::from("# # # #"),     // |
+        Rock::from("## ##"),       // ■
+    ]
+}
+
+#[derive(Debug, Clone, Copy)]
 struct Rock {
-    dx: i32,
-    dy: i32,
-    bits: u32,
-    mask0: u32,
+    shape: u32, // shape in bytes, lowest byte is at bottom
+    nrows: usize,
 }
 
 impl Rock {
-    fn new(dx: i32, dy: i32, s: &str) -> Rock {
-        let mut bits = 0;
-        let mut n: i32 = 0;
-        for c in s.chars() {
-            if c == '#' || c == '.' {
-                bits = (bits << 1) | u32::from(c == '#');
-                n += 1;
-            }
-        }
-        if n != dx * dy {
-            panic!("invalid shape");
-        }
-        Rock {
-            dx,
-            dy,
-            bits,
-            mask0: 1 << n,
-        }
-    }
-
-    fn bits(&self, at: (i32, i32)) -> impl Iterator<Item = (i32, i32)> + '_ {
-        let mut mask = self.mask0;
-        (0..self.dy)
-            .flat_map(|y| (0..self.dx).map(move |x| (x, y)))
-            .filter_map(move |(x, y)| {
-                mask >>= 1;
-                (self.bits & mask != 0).then_some((at.0 + x, at.1 + y))
+    fn from(s: &str) -> Rock {
+        let (shape, nrows) = s
+            .split(' ')
+            .map(|line| {
+                line.chars()
+                    .enumerate()
+                    .filter_map(|(i, c)| (c == '#').then_some(1_u8 << (4 - i)))
+                    .fold(0, |acc, m| acc | m)
             })
+            .fold((0_u32, 0_usize), |(shape, nrows), m| {
+                (shape << 8 | m as u32, nrows + 1)
+            });
+        Rock { shape, nrows }
     }
 }
 
-fn rock_shapes() -> Vec<Rock> {
-    vec![
-        Rock::new(4, 1, "####"),
-        Rock::new(3, 3, ".#. ### .#."),
-        Rock::new(3, 3, "### ..# ..#"), // note: upside down
-        Rock::new(1, 4, "# # # #"),
-        Rock::new(2, 2, "## ##"),
-    ]
+#[derive(Debug, Clone, Copy)]
+enum Wind {
+    Left,
+    Right,
+}
+
+const LEFT_MASK: u32 = 0x40404040; // mask of falling rock at the left wall
+const RGHT_MASK: u32 = 0x01010101; // mask of falling rock at the right wall
+                                   //
+impl Wind {
+    fn iter(src: &str) -> impl Iterator<Item = Wind> + Clone + '_ {
+        src.trim().chars().filter_map(|c| match c {
+            '<' => Some(Wind::Left),
+            '>' => Some(Wind::Right),
+            _ => None,
+        })
+    }
+
+    fn shift(&self, rock: u32) -> u32 {
+        match self {
+            Wind::Left => {
+                if rock & LEFT_MASK == 0 {
+                    return rock << 1;
+                }
+            }
+            Wind::Right => {
+                if rock & RGHT_MASK == 0 {
+                    return rock >> 1;
+                }
+            }
+        }
+        rock
+    }
 }
