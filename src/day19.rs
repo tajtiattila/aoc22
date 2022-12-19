@@ -30,26 +30,17 @@ fn sim2(bps: &[Blueprint]) -> usize {
 }
 
 fn bfs_sim(bp: &Blueprint, time: usize) -> usize {
-    const MAX_SCORE_DIFF: usize = 1;
-    let mut scores = Vec::new();
-    scores.resize(time + 1, 0);
     let mut seen = HashSet::new();
-    let mut queue = VecDeque::from([(State::new(), time)]);
-    let mut bestg = 0;
-    while let Some((s, t)) = queue.pop_front() {
-        if t <= 1 {
-            bestg = max(bestg, s.res.gde + s.robot.gde);
+    let mut queue = VecDeque::from([State::new(time)]);
+    let mut best = 0;
+    while let Some(s) = queue.pop_front() {
+        best = max(best, s.score());
+        if s.ttg <= 1 {
             continue;
         }
-        if s.score(t) + MAX_SCORE_DIFF < scores[t] {
-            continue;
-        }
-        for r in s.nexts(bp) {
-            let t = t - 1;
-            let rscore = r.score(t);
-            if rscore + MAX_SCORE_DIFF >= scores[t] && seen.insert((r, t)) {
-                scores[t] = max(scores[t], rscore);
-                queue.push_back((r, t));
+        for r in s.nexts2(bp) {
+            if seen.insert(r) {
+                queue.push_back(r);
             }
         }
     }
@@ -59,18 +50,18 @@ fn bfs_sim(bp: &Blueprint, time: usize) -> usize {
         println!(
             "  Blueprint {:2}: {}",
             bp.num,
-            match bestg {
+            match best {
                 0 => "no geode",
                 1 => " 1 geode",
                 _ => {
-                    msg = format!("{:2} geodes", bestg);
+                    msg = format!("{:2} geodes", best);
                     msg.as_str()
                 }
             }
         );
     }
 
-    bestg.into()
+    best
 }
 
 type Count = u8;
@@ -88,6 +79,8 @@ struct Blueprint {
 
     gde_ore: Count,
     gde_obs: Count,
+
+    ore_max: Count,
 }
 
 impl Blueprint {
@@ -96,27 +89,53 @@ impl Blueprint {
             .split(' ')
             .map(|s| s.trim_end_matches(':'))
             .filter_map(|s| s.parse().ok());
-        Some(Blueprint {
-            num: it.next()?,
-            ore_ore: it.next()?,
-            cly_ore: it.next()?,
-            obs_ore: it.next()?,
-            obs_cly: it.next()?,
-            gde_ore: it.next()?,
-            gde_obs: it.next()?,
-        })
+        Some(Blueprint::from(
+            it.next()?,
+            it.next()?,
+            it.next()?,
+            it.next()?,
+            it.next()?,
+            it.next()?,
+            it.next()?,
+        ))
+    }
+
+    fn from(
+        num: Count,
+        ore_ore: Count,
+        cly_ore: Count,
+        obs_ore: Count,
+        obs_cly: Count,
+        gde_ore: Count,
+        gde_obs: Count,
+    ) -> Blueprint {
+        Blueprint {
+            num,
+            ore_ore,
+            cly_ore,
+            obs_ore,
+            obs_cly,
+            gde_ore,
+            gde_obs,
+            ore_max: [ore_ore, cly_ore, obs_ore, gde_ore]
+                .into_iter()
+                .max()
+                .unwrap(),
+        }
     }
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 struct State {
+    ttg: usize,    // time to go
     robot: Counts, // no. of robots for each resource
     res: Counts,   // available resources
 }
 
 impl State {
-    fn new() -> State {
+    fn new(ttg: usize) -> State {
         State {
+            ttg,
             robot: Counts {
                 ore: 1,
                 cly: 0,
@@ -132,78 +151,142 @@ impl State {
         }
     }
 
-    fn score(&self, time_left: usize) -> usize {
-        (self.res.gde as usize) + time_left + (self.robot.gde as usize)
+    fn score(&self) -> usize {
+        (self.res.gde as usize) + self.ttg * (self.robot.gde as usize)
     }
 
-    #[allow(clippy::unnecessary_lazy_evaluations)]
-    fn nexts(&self, bp: &Blueprint) -> impl Iterator<Item = State> {
-        let nres = Counts {
-            ore: self.res.ore + self.robot.ore,
-            cly: self.res.cly + self.robot.cly,
-            obs: self.res.obs + self.robot.obs,
-            gde: self.res.gde + self.robot.gde,
-        };
+    fn show(&self) -> String {
+        format!(
+            "@{:02}  ore{:2}+{}  cly{:2}+{}  obs{:2}+{}  gde{:2}+{}",
+            self.ttg,
+            self.res.ore,
+            self.robot.ore,
+            self.res.cly,
+            self.robot.cly,
+            self.res.obs,
+            self.robot.obs,
+            self.res.gde,
+            self.robot.gde
+        )
+    }
 
-        //println!("{:?} {:?}", self.res, bp);
-        let m_ore = (self.res.ore >= bp.ore_ore).then(|| State {
-            robot: Counts {
-                ore: self.robot.ore + 1,
-                ..self.robot
-            },
-            res: Counts {
-                ore: nres.ore - bp.ore_ore,
-                ..nres
-            },
-        });
-
-        let m_cly = (self.res.ore >= bp.cly_ore).then(|| State {
-            robot: Counts {
-                cly: self.robot.cly + 1,
-                ..self.robot
-            },
-            res: Counts {
-                ore: nres.ore - bp.cly_ore,
-                ..nres
-            },
-        });
-
-        let m_obs = (self.res.ore >= bp.obs_ore && self.res.cly >= bp.obs_cly).then(|| State {
-            robot: Counts {
-                obs: self.robot.obs + 1,
-                ..self.robot
-            },
-            res: Counts {
-                ore: nres.ore - bp.obs_ore,
-                cly: nres.cly - bp.obs_cly,
-                ..nres
-            },
-        });
-
-        let m_gde = (self.res.ore >= bp.gde_ore && self.res.obs >= bp.gde_obs).then(|| State {
-            robot: Counts {
-                gde: self.robot.gde + 1,
-                ..self.robot
-            },
-            res: Counts {
-                ore: nres.ore - bp.gde_ore,
-                obs: nres.obs - bp.gde_obs,
-                ..nres
-            },
-        });
-
+    fn nexts2(&self, bp: &Blueprint) -> impl Iterator<Item = State> {
         [
-            Some(State {
-                robot: self.robot,
-                res: nres,
-            }),
-            m_ore,
-            m_cly,
-            m_obs,
-            m_gde,
+            self.make_ore_robot(bp),
+            self.make_cly_robot(bp),
+            self.make_obs_robot(bp),
+            self.make_gde_robot(bp),
         ]
         .into_iter()
         .flatten()
+    }
+
+    fn make_ore_robot(&self, bp: &Blueprint) -> Option<State> {
+        if Self::res_max(self.ttg, self.res.ore, self.robot.ore, bp.ore_max) {
+            return None;
+        }
+        let t = Self::build_turn(bp.ore_ore, self.res.ore, self.robot.ore);
+        (t <= self.ttg).then(|| {
+            let mut s = self.wait(t);
+            s.robot.ore += 1;
+            s.res.ore -= bp.ore_ore;
+            self.sim_dump("ore", t, &s);
+            s
+        })
+    }
+
+    fn make_cly_robot(&self, bp: &Blueprint) -> Option<State> {
+        if Self::res_max(self.ttg, self.res.cly, self.robot.cly, bp.obs_cly) {
+            return None;
+        }
+        let t = Self::build_turn(bp.cly_ore, self.res.ore, self.robot.ore);
+        (t <= self.ttg).then(|| {
+            let mut s = self.wait(t);
+            s.robot.cly += 1;
+            s.res.ore -= bp.cly_ore;
+            self.sim_dump("cly", t, &s);
+            s
+        })
+    }
+
+    fn make_obs_robot(&self, bp: &Blueprint) -> Option<State> {
+        if Self::res_max(self.ttg, self.res.obs, self.robot.obs, bp.gde_obs) {
+            return None;
+        }
+        let t = max(
+            Self::build_turn(bp.obs_ore, self.res.ore, self.robot.ore),
+            Self::build_turn(bp.obs_cly, self.res.cly, self.robot.cly),
+        );
+        (t <= self.ttg).then(|| {
+            let mut s = self.wait(t);
+            s.robot.obs += 1;
+            s.res.ore -= bp.obs_ore;
+            s.res.cly -= bp.obs_cly;
+            self.sim_dump("obs", t, &s);
+            s
+        })
+    }
+
+    fn make_gde_robot(&self, bp: &Blueprint) -> Option<State> {
+        let t = max(
+            Self::build_turn(bp.gde_ore, self.res.ore, self.robot.ore),
+            Self::build_turn(bp.gde_obs, self.res.obs, self.robot.obs),
+        );
+        (t <= self.ttg).then(|| {
+            let mut s = self.wait(t);
+            s.robot.gde += 1;
+            s.res.ore -= bp.gde_ore;
+            s.res.obs -= bp.gde_obs;
+            self.sim_dump("gde", t, &s);
+            s
+        })
+    }
+
+    fn build_turn(goal: Count, cur: Count, inc: Count) -> usize {
+        if inc == 0 {
+            return usize::MAX;
+        }
+        if cur >= goal {
+            return 1;
+        }
+        let d = (goal - cur + inc - 1) as usize;
+        let r = d / (inc as usize);
+        assert!(cur + (r as Count) * inc >= goal);
+        r + 1
+    }
+
+    fn wait(&self, t: usize) -> State {
+        let count = t as Count;
+        State {
+            ttg: self.ttg - t,
+            robot: self.robot,
+            res: Counts {
+                ore: self.res.ore + count * self.robot.ore,
+                cly: self.res.cly + count * self.robot.cly,
+                obs: self.res.obs + count * self.robot.obs,
+                gde: self.res.gde + count * self.robot.gde,
+            },
+        }
+    }
+
+    // https://www.reddit.com/r/adventofcode/comments/zpy5rm/2022_day_19_what_are_your_insights_and/
+    fn res_max(ttg: usize, cur: Count, inc: Count, us: Count) -> bool {
+        (cur as usize) + ttg * (inc as usize) >= ttg * (us as usize)
+    }
+
+    fn sim_dump(&self, what: &str, t: usize, next: &State) {
+        const DUMP_SIM: bool = false;
+
+        if DUMP_SIM {
+            println!(
+                " {}  +{} in {:2} -> {} ({})",
+                self.show(),
+                what,
+                t,
+                next.show(),
+                next.score()
+            );
+        }
     }
 }
 
@@ -213,4 +296,21 @@ struct Counts {
     cly: Count,
     obs: Count,
     gde: Count,
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn bfs_sim_works() {
+        let sample = "Blueprint 1: Each ore robot costs 4 ore. Each clay robot costs 2 ore. Each obsidian robot costs 3 ore and 14 clay. Each geode robot costs 2 ore and 7 obsidian.\n";
+        assert_eq!(bfs_sim(&Blueprint::parse(sample).unwrap(), 24), 9);
+    }
+
+    #[test]
+    fn bfs_sim2_works() {
+        let sample = "Blueprint 24: Each ore robot costs 4 ore. Each clay robot costs 3 ore. Each obsidian robot costs 3 ore and 7 clay. Each geode robot costs 3 ore and 9 obsidian.\n";
+        assert_eq!(bfs_sim(&Blueprint::parse(sample).unwrap(), 24), 9);
+    }
 }
