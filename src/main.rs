@@ -2,6 +2,7 @@ use anyhow::Result;
 use clap::Parser;
 use once_cell::sync::OnceCell;
 use std::collections::HashSet;
+use std::time::{Duration, Instant};
 
 const AOC_YEAR: u32 = 22;
 
@@ -83,19 +84,45 @@ fn main() -> anyhow::Result<()> {
     CLI_INSTANCE.set(cli).unwrap();
 
     for (i, f) in dfs {
-        let r = is.get(i).and_then(|s| f(&s));
-        print!("Day {:?}: ", i);
+        let r = is.get(i);
+        let now = Instant::now();
+        let r = r.and_then(|s| f(&s));
+        print!("Day {:2}: ", i);
         match r {
-            Ok(result) => println!("{}", result),
-            Err(e) => eprintln!("{}", e),
+            Ok(result) => println!("{}  ({})", result, fmt_duration(now.elapsed())),
+            Err(e) => {
+                println!();
+                eprintln!("{}", e);
+            }
         }
     }
 
     Ok(())
 }
 
+fn fmt_duration(d: Duration) -> String {
+    let ms = d.as_secs_f64() * 1000.0;
+    if ms < 100.0 {
+        return format!("{:.1}ms", ms);
+    }
+    let nsec = d.as_secs();
+    let h = nsec / 3600;
+    let m = (nsec / 60) % 60;
+    let s = nsec % 60;
+    let ms = d.as_millis() % 1000;
+    let mut fmt = String::new();
+    if h > 0 {
+        fmt.push_str(&format!("{}h", h))
+    }
+    if h > 0 || m > 0 {
+        fmt.push_str(&format!("{}m", m))
+    }
+    fmt.push_str(&format!("{}.{:03}s", s, ms));
+    fmt
+}
+
 pub fn verbose() -> bool {
-    Cli::global().verbose
+    CLI_INSTANCE.get().map(|cli| cli.verbose).unwrap_or(true)
 }
 
 type DayFunc = fn(&str) -> Result<String>;
