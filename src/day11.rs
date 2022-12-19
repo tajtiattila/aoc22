@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-pub fn run(input: &str, _: &crate::Options) -> anyhow::Result<String> {
+pub fn run(input: &str) -> anyhow::Result<String> {
     let monkeys = parse(input);
     let p1 = sim(&monkeys, 3, 20);
     let p2 = sim(&monkeys, 1, 10000);

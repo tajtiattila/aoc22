@@ -1,7 +1,6 @@
 use anyhow::Result;
 
-pub fn run(input: &str, _: &crate::Options) -> Result<String> {
-    println!("len: {}", input.trim().len());
+pub fn run(input: &str) -> Result<String> {
     let p1 = tower_height(input, 2022);
     // 1566227410342 too low
     let p2 = tower_height(input, 1000000000000);
@@ -13,7 +12,11 @@ fn tower_height(input: &str, nrocks: usize) -> usize {
     let mut s = Sim::from(Wind::iter(input).cycle());
     let rept = rocks().len() * wind_len;
 
-    println!("{} {}", nrocks, rept);
+    let verbose = crate::verbose();
+    if verbose {
+        println!("{} rocks, repeat {} times", nrocks, rept);
+    }
+
     if rept > nrocks {
         s.step_n(nrocks);
         return s.height() as usize;
@@ -52,9 +55,13 @@ fn tower_height(input: &str, nrocks: usize) -> usize {
 
     s.step_n(c_rocks);
     let c_height = s.height() as usize - cur;
-    println!("{} {}·{} {}", a_height, b_times, b_height, c_height);
 
-    a_height + b_times * b_height + c_height
+    let p = a_height + b_times * b_height + c_height;
+    if verbose {
+        println!("{} {}·{} {} = {}", a_height, b_times, b_height, c_height, p);
+    }
+
+    p
 }
 
 #[cfg(test)]

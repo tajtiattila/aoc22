@@ -3,8 +3,7 @@ use pathfinding::prelude::bfs_reach;
 use std::cmp::{max, min};
 use std::collections::{HashMap, HashSet};
 
-pub fn run(input: &str, _: &crate::Options) -> Result<String> {
-    // 2654 too low
+pub fn run(input: &str) -> Result<String> {
     let p1 = cuboids_surface(input);
     let p2 = outer_surface(input);
     Ok(format!("{} {}", p1, p2))

@@ -1,7 +1,7 @@
 use anyhow::{anyhow, bail, Result};
 use pathfinding::prelude::{astar, bfs};
 
-pub fn run(input: &str, _: &crate::Options) -> Result<String> {
+pub fn run(input: &str) -> Result<String> {
     let p = parse(input)?;
     let p1 = path_len(&p).ok_or_else(|| anyhow!("path failed"))?;
     // 452 too high

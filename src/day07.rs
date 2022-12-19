@@ -1,13 +1,15 @@
-use crate::Options;
+use crate::Cli;
 use anyhow::{anyhow, bail};
 use std::collections::HashMap;
 
-pub fn run(input: &str, o: &Options) -> anyhow::Result<String> {
+pub fn run(input: &str) -> anyhow::Result<String> {
     let t = tree(input).ok_or_else(|| anyhow!("invalid tree"))?;
     let sizes = dir_sizes(&t);
     if sizes.is_empty() {
         bail!("sizes empty");
     }
+
+    let verbose = Cli::global().verbose;
 
     const LIM: usize = 100000;
     let p1: usize = sizes.iter().filter(|&&x| x <= LIM).sum();
@@ -15,7 +17,7 @@ pub fn run(input: &str, o: &Options) -> anyhow::Result<String> {
     const CAP: usize = 70000000;
     const NEED: usize = 30000000;
     let free = CAP - *sizes.last().unwrap();
-    if o.verbose {
+    if verbose {
         println!("free space: {}/{}", free, CAP);
     }
     let p2 = sizes.iter().filter(|&&x| free + x >= NEED).min().unwrap();

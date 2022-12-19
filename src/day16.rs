@@ -2,10 +2,11 @@ use anyhow::{anyhow, bail, Result};
 use pathfinding::prelude::bfs_reach;
 use std::collections::HashMap;
 
-pub fn run(input: &str, o: &crate::Options) -> Result<String> {
+pub fn run(input: &str) -> Result<String> {
     let rdg = parse(input)?;
     let working = working_valves(&rdg);
-    if o.verbose {
+    let verbose = crate::verbose();
+    if verbose {
         for v in &working {
             print!(" {} rate={:2}   ", v.label, v.rate);
             for (i, (j, d)) in v.next.iter().enumerate() {
@@ -19,8 +20,8 @@ pub fn run(input: &str, o: &crate::Options) -> Result<String> {
             println!();
         }
     }
-    let p1 = pressure_release_1(&working, o.verbose)?;
-    let p2 = pressure_release_2(&working, o.verbose)?;
+    let p1 = pressure_release_1(&working, verbose)?;
+    let p2 = pressure_release_2(&working, verbose)?;
     Ok(format!("{} {}", p1, p2))
 }
 

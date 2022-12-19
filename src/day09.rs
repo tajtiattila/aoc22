@@ -1,7 +1,6 @@
-use crate::Options;
 use std::collections::HashSet;
 
-pub fn run(input: &str, _: &Options) -> anyhow::Result<String> {
+pub fn run(input: &str) -> anyhow::Result<String> {
     let p1 = stretch(input, 2);
     let p2 = stretch(input, 10);
     Ok(format!("{} {}", p1, p2))

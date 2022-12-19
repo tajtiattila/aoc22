@@ -2,9 +2,9 @@ use anyhow::{anyhow, Result};
 use itertools::Itertools;
 use std::collections::HashMap;
 
-pub fn run(input: &str, o: &crate::Options) -> Result<String> {
+pub fn run(input: &str) -> Result<String> {
     let rdg = parse(input);
-    if o.verbose {
+    if crate::verbose() {
         for s in &rdg {
             println!("({},{}) range {}", s.p.0, s.p.1, s.range);
         }

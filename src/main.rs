@@ -1,5 +1,6 @@
 use anyhow::Result;
 use clap::Parser;
+use once_cell::sync::OnceCell;
 use std::collections::HashSet;
 
 const AOC_YEAR: u32 = 22;
@@ -51,7 +52,7 @@ mod quadmap;
 mod util;
 use util::InputSource;
 
-#[derive(Parser)]
+#[derive(Debug, Parser)]
 struct Cli {
     #[arg(short, long)]
     verbose: bool,
@@ -62,17 +63,25 @@ struct Cli {
     days: Vec<usize>,
 }
 
+impl Cli {
+    pub fn global() -> &'static Cli {
+        CLI_INSTANCE.get().expect("CLI is not initialized")
+    }
+}
+
+static CLI_INSTANCE: OnceCell<Cli> = OnceCell::new();
+
 fn main() -> anyhow::Result<()> {
     let is = InputSource::new()?;
 
     let cli = Cli::parse();
-    let options = Options {
-        verbose: cli.verbose,
-    };
+
     let dfs = get_day_funcs(&cli);
 
+    CLI_INSTANCE.set(cli).unwrap();
+
     for (i, f) in dfs {
-        let r = is.get(i).and_then(|s| f(&s, &options));
+        let r = is.get(i).and_then(|s| f(&s));
         print!("Day {:?}: ", i);
         match r {
             Ok(result) => println!("{}", result),
@@ -83,11 +92,11 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-pub struct Options {
-    verbose: bool,
+pub fn verbose() -> bool {
+    Cli::global().verbose
 }
 
-type DayFunc = fn(&str, &Options) -> Result<String>;
+type DayFunc = fn(&str) -> Result<String>;
 
 fn get_day_funcs(cli: &Cli) -> Vec<(usize, DayFunc)> {
     let v: Vec<(usize, DayFunc)> = day_funcs()

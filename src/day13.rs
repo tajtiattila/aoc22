@@ -1,7 +1,7 @@
 use anyhow::{anyhow, bail, Result};
 use std::cmp::Ordering;
 
-pub fn run(input: &str, _: &crate::Options) -> Result<String> {
+pub fn run(input: &str) -> Result<String> {
     let trees = parse(input)?;
 
     let p1 = check_sort(&trees);

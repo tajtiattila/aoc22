@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-pub fn run(input: &str, _: &crate::Options) -> Result<String> {
+pub fn run(input: &str) -> Result<String> {
     let (p1, _) = sim_drops(input, false)?;
     let (p2, _) = sim_drops(input, true)?;
     Ok(format!("{} {}", p1, p2))

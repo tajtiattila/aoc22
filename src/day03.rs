@@ -1,8 +1,7 @@
-use crate::Options;
 use itertools::Itertools;
 use std::collections::HashSet;
 
-pub fn run(input: &str, _: &Options) -> anyhow::Result<String> {
+pub fn run(input: &str) -> anyhow::Result<String> {
     Ok(format!("{} {}", p1(input), p2(input)))
 }
 

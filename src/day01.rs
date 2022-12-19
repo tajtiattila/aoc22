@@ -1,7 +1,6 @@
-use crate::Options;
 use std::cmp::Reverse;
 
-pub fn run(input: &str, _: &Options) -> anyhow::Result<String> {
+pub fn run(input: &str) -> anyhow::Result<String> {
     let mut cals = calories(input);
     cals.sort_by_key(|&x| Reverse(x));
 

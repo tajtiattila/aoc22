@@ -1,6 +1,4 @@
-use crate::Options;
-
-pub fn run(input: &str, _: &Options) -> anyhow::Result<String> {
+pub fn run(input: &str) -> anyhow::Result<String> {
     let p1 = count_rp(input, |a, b, c, d| (a <= c && d <= b));
     let p2 = count_rp(input, |a, b, c, d| {
         (a..=b).contains(&c) || (a..=b).contains(&d)

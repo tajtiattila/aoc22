@@ -1,6 +1,4 @@
-use crate::Options;
-
-pub fn run(input: &str, _: &Options) -> anyhow::Result<String> {
+pub fn run(input: &str) -> anyhow::Result<String> {
     let (stk, vrearr) = parse(input);
 
     let p1 = sim(move1, &stk, &vrearr);

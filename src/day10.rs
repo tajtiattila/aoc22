@@ -1,6 +1,4 @@
-use crate::Options;
-
-pub fn run(input: &str, _: &Options) -> anyhow::Result<String> {
+pub fn run(input: &str) -> anyhow::Result<String> {
     let p1 = signal_strength(input);
     let p2 = crt(input, '▒', ' ');
     Ok(format!("{}{}", p1, p2))

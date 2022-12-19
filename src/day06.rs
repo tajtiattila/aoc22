@@ -1,6 +1,4 @@
-use crate::Options;
-
-pub fn run(input: &str, _: &Options) -> anyhow::Result<String> {
+pub fn run(input: &str) -> anyhow::Result<String> {
     let input = input.trim_matches(char::is_whitespace);
 
     Ok(format!(

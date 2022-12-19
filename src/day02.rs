@@ -1,7 +1,6 @@
-use crate::Options;
 use std::cmp::Ordering;
 
-pub fn run(input: &str, _: &Options) -> anyhow::Result<String> {
+pub fn run(input: &str) -> anyhow::Result<String> {
     let p1 = sim(input, |_, p| p);
     let p2 = sim(input, |o, z| (o + z + 2) % 3);
     Ok(format!("{} {}", p1, p2))
