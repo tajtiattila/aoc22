@@ -1,9 +1,17 @@
-use pathfinding::prelude::bfs_reach;
+use std::cmp::max;
+use std::collections::{HashSet, VecDeque};
 
 pub fn run(input: &str) -> anyhow::Result<String> {
-    let bps = parse(input);
-    let p1 = sim_all(&bps, 24);
-    let p2 = "";
+    let bps = &parse(input);
+    let verbose = crate::verbose();
+    if verbose {
+        println!("Problem 1");
+    }
+    let p1 = sim1(bps);
+    if verbose {
+        println!("Problem 2");
+    }
+    let p2 = sim2(bps);
     Ok(format!("{} {}", p1, p2))
 }
 
@@ -11,23 +19,61 @@ fn parse(input: &str) -> Vec<Blueprint> {
     input.lines().filter_map(Blueprint::parse).collect()
 }
 
-fn sim_all(bps: &[Blueprint], time: u8) -> usize {
+fn sim1(bps: &[Blueprint]) -> usize {
     bps.iter()
-        .filter_map(|bp| sim(bp, time).map(|n| (bp.num as usize) * n))
+        .map(|bp| (bp.num as usize) * bfs_sim(bp, 24))
         .sum()
 }
 
-fn sim(bp: &Blueprint, time: u8) -> Option<usize> {
-    println!("Blueprint: {:?}", bp);
-    #[allow(clippy::unnecessary_lazy_evaluations)]
-    bfs_reach((State::new(), time), |&(n, ttg)| {
-        n.nexts(bp)
-            .filter_map(move |m| (ttg > 0).then(|| (m, ttg - 1)))
-    })
-    .filter(|&(_, ttg)| (ttg == 0))
-    .map(|(n, _)| n.res.gde as usize)
-    .max()
+fn sim2(bps: &[Blueprint]) -> usize {
+    bps.iter().take(3).map(|bp| bfs_sim(bp, 32)).product()
 }
+
+fn bfs_sim(bp: &Blueprint, time: usize) -> usize {
+    const MAX_SCORE_DIFF: usize = 1;
+    let mut scores = Vec::new();
+    scores.resize(time + 1, 0);
+    let mut seen = HashSet::new();
+    let mut queue = VecDeque::from([(State::new(), time)]);
+    let mut bestg = 0;
+    while let Some((s, t)) = queue.pop_front() {
+        if t <= 1 {
+            bestg = max(bestg, s.res.gde + s.robot.gde);
+            continue;
+        }
+        if s.score(t) + MAX_SCORE_DIFF < scores[t] {
+            continue;
+        }
+        for r in s.nexts(bp) {
+            let t = t - 1;
+            let rscore = r.score(t);
+            if rscore + MAX_SCORE_DIFF >= scores[t] && seen.insert((r, t)) {
+                scores[t] = max(scores[t], rscore);
+                queue.push_back((r, t));
+            }
+        }
+    }
+
+    if crate::verbose() {
+        let msg;
+        println!(
+            "  Blueprint {:2}: {}",
+            bp.num,
+            match bestg {
+                0 => "no geode",
+                1 => " 1 geode",
+                _ => {
+                    msg = format!("{:2} geodes", bestg);
+                    msg.as_str()
+                }
+            }
+        );
+    }
+
+    bestg.into()
+}
+
+type Count = u8;
 
 #[derive(Debug, Copy, Clone)]
 struct Blueprint {
@@ -84,6 +130,10 @@ impl State {
                 gde: 0,
             },
         }
+    }
+
+    fn score(&self, time_left: usize) -> usize {
+        (self.res.gde as usize) + time_left + (self.robot.gde as usize)
     }
 
     #[allow(clippy::unnecessary_lazy_evaluations)]
@@ -156,8 +206,6 @@ impl State {
         .flatten()
     }
 }
-
-type Count = u8;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 struct Counts {
