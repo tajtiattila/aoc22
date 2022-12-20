@@ -1,14 +1,26 @@
 use anyhow::{anyhow, Result};
 
 pub fn run(input: &str) -> Result<String> {
-    let p1 = coord_sum(input)?;
-    let p2 = "";
+    let p1 = coord_sum(input, 1, 1)?;
+    let p2 = coord_sum(input, DECR_KEY, 10)?;
     Ok(format!("{} {}", p1, p2))
 }
 
-fn coord_sum(input: &str) -> Result<i32> {
-    let mut m = Mixer::from(input)?;
-    m.mix();
+type Num = i64;
+const DECR_KEY: Num = 811589153;
+
+fn coord_sum(input: &str, key: Num, nmix: usize) -> Result<Num> {
+    let mut m = Mixer::from(input, key)?;
+    let verbose = crate::verbose();
+    if verbose {
+        println!("     {:?}", m.to_vec());
+    }
+    for i in 0..nmix {
+        m.mix();
+        if verbose {
+            println!(" {:2}: {:?}", i + 1, m.to_vec());
+        }
+    }
     let v = m.to_vec();
     let iz = v
         .iter()
@@ -27,11 +39,11 @@ struct Mixer {
 }
 
 impl Mixer {
-    fn from(input: &str) -> Result<Mixer> {
+    fn from(input: &str, key: Num) -> Result<Mixer> {
         let v = input
             .lines()
-            .map(|s| s.parse::<i32>())
-            .collect::<std::result::Result<Vec<i32>, _>>()?;
+            .map(|s| s.parse::<Num>())
+            .collect::<std::result::Result<Vec<Num>, _>>()?;
         let vl = v.len();
         Ok(Mixer {
             head: 0,
@@ -41,7 +53,7 @@ impl Mixer {
                 .map(|(i, x)| Node {
                     pred: (i + vl - 1) % vl,
                     succ: (i + 1) % vl,
-                    value: *x,
+                    value: *x * key,
                 })
                 .collect(),
         })
@@ -50,11 +62,10 @@ impl Mixer {
     fn mix(&mut self) {
         for i in 0..self.vec.len() {
             self.shift(i);
-            //println!("{:2}: {:?}", i, self.to_vec());
         }
     }
 
-    fn to_vec(&self) -> Vec<i32> {
+    fn to_vec(&self) -> Vec<Num> {
         let mut v = Vec::new();
         v.reserve(self.vec.len());
 
@@ -78,23 +89,29 @@ impl Mixer {
             self.head = self.vec[self.head].succ;
         }
         if v < 0 {
-            self.shift_left(i, -v);
+            self.shift_left(i, self.nshift(-v));
         } else {
-            self.shift_right(i, v);
+            self.shift_right(i, self.nshift(v));
         }
     }
 
-    fn shift_left(&mut self, i: usize, n: i32) {
+    fn nshift(&self, n: Num) -> usize {
+        // wrapping ignores the element being moved
+        let wrap = self.vec.len() - 1;
+        ((n as usize) + wrap - 1) % wrap
+    }
+
+    fn shift_left(&mut self, i: usize, n: usize) {
         let mut j = self.unlink(i).0;
-        for _ in 1..n {
+        for _ in 0..n {
             j = self.vec[j].pred;
         }
         self.link(self.vec[j].pred, i, j);
     }
 
-    fn shift_right(&mut self, i: usize, n: i32) {
+    fn shift_right(&mut self, i: usize, n: usize) {
         let mut j = self.unlink(i).1;
-        for _ in 1..n {
+        for _ in 0..n {
             j = self.vec[j].succ;
         }
         self.link(j, i, self.vec[j].succ);
@@ -130,7 +147,7 @@ struct Node {
     pred: usize,
     succ: usize,
 
-    value: i32,
+    value: Num,
 }
 
 #[cfg(test)]
@@ -140,6 +157,7 @@ mod test {
     #[test]
     fn day20_works() {
         let sample = "1\n2\n-3\n3\n-2\n0\n4\n";
-        assert_eq!(coord_sum(sample).ok(), Some(3));
+        assert_eq!(coord_sum(sample, 1, 1).ok(), Some(3));
+        assert_eq!(coord_sum(sample, DECR_KEY, 10).ok(), Some(1623178306));
     }
 }
