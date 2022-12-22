@@ -27,6 +27,7 @@ mod day18;
 mod day19;
 mod day20;
 mod day21;
+mod day22;
 
 fn day_funcs() -> Vec<DayFunc> {
     vec![
@@ -51,6 +52,7 @@ fn day_funcs() -> Vec<DayFunc> {
         (day19::run as DayFunc),
         (day20::run as DayFunc),
         (day21::run as DayFunc),
+        (day22::run as DayFunc),
     ]
 }
 
