@@ -2,27 +2,27 @@ use anyhow::Result;
 use std::collections::{HashMap, HashSet};
 
 pub fn run(input: &str) -> Result<String> {
-    let p1 = sim1(input, 10);
-    let p2 = "";
+    let p1 = sim_step_area(input, 10);
+    let p2 = find_stop_round(input);
     Ok(format!("{} {}", p1, p2))
 }
 
-fn sim1(input: &str, n: usize) -> usize {
+const SHOW_STEPS: bool = false;
+fn sim_step_area(input: &str, n: usize) -> usize {
     let mut s = Sim::from(input);
     for _ in 0..n {
-        /*
-        for (e,p) in s.nexts() {
-            print!("  {:?} -> ", e);
-            match p {
-                Some(x) => println!("{:?}", x),
-                None => println!("{}", '*'),
-            }
-        }
-        */
         s.step();
-        println!("{}", s.to_string_lines());
+        if crate::verbose() {
+            println!("{}", s.to_string_lines());
+        }
     }
     s.count_free()
+}
+
+fn find_stop_round(input: &str) -> usize {
+    let mut s = Sim::from(input);
+    while s.step() {}
+    s.n
 }
 
 struct Sim {
@@ -38,7 +38,7 @@ impl Sim {
         }
     }
 
-    fn step(&mut self) {
+    fn step(&mut self) -> bool {
         let mut goal = HashMap::new();
         for (_, p) in self.nexts() {
             if let Some(x) = p {
@@ -46,11 +46,13 @@ impl Sim {
             }
         }
 
+        let mut moved = false;
         let m2 = self
             .nexts()
             .map(|(e, p)| {
                 if let Some(x) = p {
                     if goal.get(&x) == Some(&1) {
+                        moved = true;
                         return x;
                     }
                 }
@@ -60,6 +62,8 @@ impl Sim {
 
         self.m = m2;
         self.n += 1;
+
+        moved
     }
 
     fn count_free(&self) -> usize {
@@ -182,6 +186,7 @@ mod test {
 ##.#.##
 .#..#..
 ";
-        assert_eq!(sim1(sample, 10), 110);
+        assert_eq!(sim_step_area(sample, 10), 110);
+        assert_eq!(find_stop_round(sample), 20);
     }
 }
