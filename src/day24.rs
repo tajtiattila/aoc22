@@ -148,7 +148,6 @@ impl Map {
 type Vec3 = (Coord, Coord, Coord);
 
 struct TimeMap {
-    dx: Coord,
     dy: Coord,
     start: Vec2,
     goal: Vec2,
@@ -158,7 +157,6 @@ struct TimeMap {
 impl TimeMap {
     fn from(m0: &Map) -> TimeMap {
         TimeMap {
-            dx: m0.dx,
             dy: m0.dy,
             start: (1, 0),
             goal: (m0.dx - 2, m0.dy - 1),
